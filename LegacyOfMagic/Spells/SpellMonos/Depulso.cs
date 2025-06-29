@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using LegacyOfMagic.Management;
 using ThunderRoad;
+using ThunderRoad.Skill.Spell;
 using UnityEngine;
 using UnityEngine.VFX;
 
@@ -25,7 +27,7 @@ namespace LegacyOfMagic.Spells.SpellMonos
             Debug.Log("In Cast override method");
             try
             {
-                Functionality();
+                GameManager.local.StartCoroutine(Functionality());
             }
             catch (NullReferenceException e)
             {
@@ -33,15 +35,17 @@ namespace LegacyOfMagic.Spells.SpellMonos
             }
         }
 
-        void Functionality()
+        IEnumerator Functionality()
         {
+            
+            if (!cachedDepulso)
+            {
+                yield return new WaitForSeconds(0.1f);
+                cachedDepulso = Instantiate(ModEntry.local.depulsoEffect);
+            }
             try
             {
-                if (!cachedDepulso)
-                {
-                    cachedDepulso = Instantiate(ModEntry.local.depulsoEffect);
-                }
-
+                    
                 cachedDepulso.transform.position = usedWand.flyDirRef.position;
                 cachedDepulso.transform.rotation = usedWand.flyDirRef.rotation;
                 cachedDepulso.GetComponentInChildren<VisualEffect>().Play();
@@ -53,24 +57,19 @@ namespace LegacyOfMagic.Spells.SpellMonos
                 {
                     foreach (Collider collider in colliderArray)
                     {
-                        if (collider.GetComponentInParent<Creature>() is Creature creature && !creature.isPlayer &&
-                            !destabilizedList.Contains(creature))
-                        {
-                            creature.ragdoll.SetState(Ragdoll.State.Destabilized);
-                            destabilizedList.Add(creature);
-                        }
-
-                        if (collider.attachedRigidbody is Rigidbody rigidbody && !rigidbody.isKinematic)
+                        if (collider.attachedRigidbody is Rigidbody rigidbody)
                         {
                             if (collider.attachedRigidbody.gameObject.layer == GameManager.GetLayer(LayerName.Ragdoll))
                             {
-
                                 if (collider.attachedRigidbody.gameObject.GetComponent<RagdollPart>() is RagdollPart
-                                        ragdollPart && destabilizedList.Contains(ragdollPart.ragdoll.creature))
+                                        ragdollPart && !ragdollPart.ragdoll.creature.isPlayer)
                                 {
-                                    Vector3 direction = ragdollPart.transform.position - currentItemPos;
+                                    ragdollPart.ragdoll.SetState(Ragdoll.State.Destabilized);
+                                    var position = ragdollPart.transform.position;
+                                    
+                                    Vector3 direction = position - currentItemPos;
                                     float distance = Vector3.Distance(usedWand.flyDirRef.position,
-                                        ragdollPart.transform.position);
+                                        position);
                                     ragdollPart.ragdoll.creature.TryPush(Creature.PushType.Magic,
                                         direction.normalized * 2f,
                                         (int)Mathf.Round(Mathf.Lerp(1f, 3f, Mathf.InverseLerp(2f, 0.0f, distance))));
@@ -103,6 +102,7 @@ namespace LegacyOfMagic.Spells.SpellMonos
             {
                 Debug.Log("Where game usually crashes");
             }
+            yield return null;
         }
     }
 }

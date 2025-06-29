@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using LegacyOfMagic.Management;
 using LegacyOfMagic.Spells.SpellMonos.Updaters;
 using ThunderRoad;
 using UnityEngine;
+using UnityEngine.VFX;
+
 namespace LegacyOfMagic.Spells.SpellMonos
 {
     public class Evanesco : Spell
@@ -13,10 +16,11 @@ namespace LegacyOfMagic.Spells.SpellMonos
         internal Vector3 ogScale;
         internal Material evanescoDissolve;
         List<Material> myMaterials;
+        private Item hitItem;
 
-
-        public void Start()
+        public override void Start()
         {
+            base.Start();
             usedWand = GetComponent<Item>();
             evanescoDissolve = ModEntry.local.evanescoDissolveMat.DeepCopyByExpressionTree();
             Cast();
@@ -25,65 +29,16 @@ namespace LegacyOfMagic.Spells.SpellMonos
 
         public override void Cast()
         {
-            CastRay();
+            hitItem = GetItemsWithinAngleAndDistance(usedWand.flyDirRef.transform.position,
+                usedWand.flyDirRef.forward, 45f, 60f);
+
+            if (hitItem != null) EvanescoExecute(hitItem);
         }
 
-        private void CastRay()
+        IEnumerator CastSpellEffect(VisualEffect vfx, Item item)
         {
-
-            RaycastHit hit;
-            GameObject parent;
-
-            if (Physics.Raycast(usedWand.flyDirRef.transform.position, usedWand.flyDirRef.transform.forward, out hit, float.MaxValue, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            {
-                parent = hit.collider.gameObject;
-                if (parent.GetComponentInParent<Item>() is Item evanescoItem)
-                {
-                    EvanescoExecute(evanescoItem);
-                }
-                else
-                {
-                    Dictionary<Item, float> toCompare = new Dictionary<Item, float>();
-                    foreach (Item selected in Item.allActive)
-                    {
-                        if(!Player.currentCreature.equipment.GetAllHolsteredItems().Contains(selected))
-                        {
-                            bool playerCheck = false;
-
-                            if (selected.mainHandler is RagdollHand handler)
-                            {
-                                if (handler.creature is Creature creature && creature.isPlayer)
-                                {
-                                    playerCheck = true;
-                                }
-                            }
-                            if (!playerCheck)
-                            {
-                                float distance = (selected.transform.position - hit.point)
-                                    .sqrMagnitude;
-                                if (distance < 1f * 1f)
-                                {
-                                    toCompare.Add(selected, distance);
-                                }
-                            }
-                        }
-                    }
-                    
-                    try
-                    {
-                        var returnItem = toCompare.Aggregate((l, r) => l.Value < r.Value ? l : r).Key;
-                        EvanescoExecute(returnItem);
-                    }
-                    catch (InvalidOperationException e)
-                    {
-                        Debug.Log("Evanesco found no items to return.");
-                    }
-                }
-            }
-        }
-
-        void EvanescoExecute(Item item)
-        {
+            yield return base.CastSpellEffect(vfx);
+            usedWand.mainHandler.playerHand.ragdollHand.PlayHapticClipOver(new AnimationCurve(new []{new Keyframe(0,0), new Keyframe(1, 2)}), 0.3f);
             foreach (var renderer in item.renderers)
             {
                 myMaterials = renderer.materials.ToList();
@@ -101,6 +56,22 @@ namespace LegacyOfMagic.Spells.SpellMonos
                 renderer.materials = matDefGood;
                 item.gameObject.AddComponent<EvanescoPerItem>(); 
             }
+            
+        }
+
+        public override void ExecuteAfterInstantiate()
+        {
+            GameManager.local.StartCoroutine(CastSpellEffect(activeCast, hitItem));
+        }
+        public override void ExecuteIfCached()
+        {
+            GameManager.local.StartCoroutine(CastSpellEffect(activeCast, hitItem));
+        }
+        void EvanescoExecute(Item item)
+        {
+            followTransform = item.transform;
+            hitItem = item;
+            GameManager.local.StartCoroutine(SetupCast(item.Center, ModEntry.evanescoCastEffect));
         }
     }
 }

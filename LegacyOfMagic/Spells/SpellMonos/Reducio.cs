@@ -1,21 +1,27 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using LegacyOfMagic.Management;
 using LegacyOfMagic.Spells.SpellMonos.Updaters;
 using UnityEngine;
 using ThunderRoad;
+using UnityEngine.VFX;
+
 namespace LegacyOfMagic.Spells.SpellMonos
 {
     public class Reducio : Spell
     {
+        private Item hitItem;
         public void Start()
         {
             usedWand = GetComponent<Item>();
             Cast();
         }
 
-        void ExecuteReducio(Item item)
+        public IEnumerator CastSpellEffect(VisualEffect vfx, Item item)
         {
+            yield return base.CastSpellEffect(vfx);
             if (item.gameObject.GetComponent<SizeManager>() is SizeManager sm)
             {
                 if (!sm.changeSize)
@@ -30,51 +36,29 @@ namespace LegacyOfMagic.Spells.SpellMonos
                 local.changeSize = true;
             }
         }
+
+        public override void ExecuteIfCached()
+        {
+            GameManager.local.StartCoroutine(CastSpellEffect(activeCast, hitItem));
+        }
+
+        public override void ExecuteAfterInstantiate()
+        {
+            GameManager.local.StartCoroutine(CastSpellEffect(activeCast, hitItem));
+        }
+
+        void ExecuteReducio(Item item)
+        {
+            followTransform = item.transform;
+            hitItem = item;
+            GameManager.local.StartCoroutine(SetupCast(item.Center, ModEntry.engorgioCastEffect));
+        }
         public override void Cast()
         {
-            RaycastHit hit;
-            if (Physics.Raycast(usedWand.flyDirRef.transform.position, usedWand.flyDirRef.transform.forward, out hit,
-                    20f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            {
-                if (hit.collider.gameObject.GetComponentInParent<Item>() is Item item)
-                {
-                    ExecuteReducio(item);
-                }
-            }
-            Dictionary<Item, float> toCompare = new Dictionary<Item, float>();
-            foreach (Item selected in Item.allActive)
-            {
-                if(!Player.currentCreature.equipment.GetAllHolsteredItems().Contains(selected))
-                {
-                    bool playerCheck = false;
+            hitItem = GetItemsWithinAngleAndDistance(usedWand.flyDirRef.transform.position,
+                usedWand.flyDirRef.forward, 45f, 60f);
 
-                    if (selected.mainHandler is RagdollHand handler)
-                    {
-                        if (handler.creature is Creature creature && creature.isPlayer)
-                        {
-                            playerCheck = true;
-                        }
-                    }
-                    if (!playerCheck)
-                    {
-                        float distance = (selected.transform.position - hit.point)
-                            .sqrMagnitude;
-                        if (distance < 1f * 1f)
-                        {
-                            toCompare.Add(selected, distance);
-                        }
-                    }
-                }
-            }
-            try
-            {
-                var returnItem = toCompare.Aggregate((l, r) => l.Value < r.Value ? l : r).Key;
-                ExecuteReducio(returnItem);
-            }
-            catch (InvalidOperationException e)
-            {
-                Debug.Log("Engorgio found no items to return.");
-            }
+            if (hitItem != null) ExecuteReducio(hitItem);
         }
     }
 }

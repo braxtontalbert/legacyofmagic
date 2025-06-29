@@ -1,6 +1,13 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using JetBrains.Annotations;
+using LegacyOfMagic.Management;
 using ThunderRoad;
 using UnityEngine;
+using UnityEngine.VFX;
+using Random = System.Random;
 
 namespace LegacyOfMagic.Spells.SpellMonos
 {
@@ -14,19 +21,22 @@ namespace LegacyOfMagic.Spells.SpellMonos
         private Side lastSide;
         private bool executeSphereCast = false;
 
+        private GameObject lastHit;
+
+        private Random random;
+
         public override void Cast()
         {
             CastRay();
         }
 
-        public void Start()
+        public override void Start()
         {
+            base.Start();
             usedWand = GetComponent<Item>();
             usedWand.OnHeldActionEvent += Item_OnHeldActionEvent;
             Cast();
         }
-
-
         private bool usePressed;
         private bool altUsePressed;
         private void Item_OnHeldActionEvent(RagdollHand ragdollHand, Handle handle, Interactable.Action action)
@@ -52,17 +62,27 @@ namespace LegacyOfMagic.Spells.SpellMonos
 
         private void CastRay()
         {
-
             RaycastHit hit;
             GameObject parent;
             bool itemValid = true;
             if (Physics.Raycast(usedWand.flyDirRef.transform.position,usedWand.flyDirRef.transform.forward, out hit, 50f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
                 parent = hit.collider.gameObject;
-
-                itemValid = ExecuteLiftSetup(parent);
-
-                if (!itemValid)
+                if (parent.GetComponentInParent<Item>() is Item item && !item.IsHeld() && !item.physicBody.rigidBody.isKinematic)
+                {
+                    if (item.holder && !item.holder.creature)
+                    {
+                        return;
+                    }
+                    followTransform = item.transform;
+                    GameManager.local.StartCoroutine(ExecuteLiftSetup(parent));
+                }
+                else if (parent.GetComponentInParent<Creature>() is Creature creature)
+                {
+                    followTransform = creature.ragdoll.targetPart.transform;
+                    GameManager.local.StartCoroutine(ExecuteLiftSetup(parent));
+                }
+                else
                 {
                     ClosestItem(hit);
                 }
@@ -80,8 +100,12 @@ namespace LegacyOfMagic.Spells.SpellMonos
             Collider[] colliders = Physics.OverlapSphere(hit.point, 2f);
             foreach (Collider collider in colliders)
             {
-                if (collider.gameObject.GetComponentInParent<Item>() is Item item)
+                if (collider.gameObject.GetComponentInParent<Item>() is Item item  && !item.IsHeld() && !item.physicBody.rigidBody.isKinematic)
                 {
+                    if (item.holder && !item.holder.creature)
+                    {
+                        return;
+                    }
                     if (closest == null)
                     {
                         closest = item;
@@ -99,9 +123,9 @@ namespace LegacyOfMagic.Spells.SpellMonos
                 }
             }
 
-            if (closest)
+            if (closest && closest.holder && !closest.holder.creature && !closest.IsHeld() && closest.physicBody.rigidBody.isKinematic)
             {
-                ExecuteLiftSetup(closest.gameObject);
+                GameManager.local.StartCoroutine(ExecuteLiftSetup(closest.gameObject));
             }
             else
             {
@@ -109,11 +133,16 @@ namespace LegacyOfMagic.Spells.SpellMonos
             }
         }
 
-        private float sphereCastMax = 50f;
-        bool ExecuteLiftSetup(GameObject parent)
+
+        private IEnumerator CastSpellEffect(VisualEffect vfx, GameObject hit)
         {
-            if (parent.GetComponentInParent<Item>() is Item item2)
+            yield return base.CastSpellEffect(vfx);
+            if (hit.GetComponentInParent<Item>() is Item item2 && !item2.IsHeld() && !item2.physicBody.rigidBody.isKinematic)
             {
+                if (item2.holder && !item2.holder.creature)
+                {
+                    yield break;
+                }
                 currentRigidbody = item2.physicBody.rigidBody;
                 canLift = true;
                 distance = Math.Abs(Vector3.Distance(currentRigidbody.transform.position, usedWand.flyDirRef.position));
@@ -121,11 +150,10 @@ namespace LegacyOfMagic.Spells.SpellMonos
 
                 executeSphereCast = false;
                 reset = false;
-                return true;
             }
-            else if (parent.GetComponentInParent<Creature>() is Creature creature1) {
-
-                currentCreature = creature1;
+            else if (hit.GetComponentInParent<Creature>() is Creature creature)
+            {
+                currentCreature = creature;
                 if(currentCreature.ragdoll.state != Ragdoll.State.Frozen) currentCreature.ragdoll.SetState(Ragdoll.State.Destabilized);
 
                 currentRigidbody = currentCreature.ragdoll.targetPart.physicBody.rigidBody;
@@ -140,10 +168,26 @@ namespace LegacyOfMagic.Spells.SpellMonos
                 }
                 executeSphereCast = false;
                 reset = false;
-                return true;
             }
+        }
+        
+        public override void ExecuteAfterInstantiate()
+        {
+            GameManager.local.StartCoroutine(CastSpellEffect(activeCast, lastHit));
+        }
 
-            return false;
+        public override void ExecuteIfCached()
+        {
+            GameManager.local.StartCoroutine(CastSpellEffect(activeCast, lastHit));
+        }
+        
+        private float sphereCastMax = 50f;
+        IEnumerator ExecuteLiftSetup(GameObject hit)
+        {
+            followTransform = hit.gameObject.transform;
+            lastHit = hit.gameObject;
+            GameManager.local.StartCoroutine(SetupCast(followTransform.position, ModEntry.wingardiumCastEffect));
+            yield return null;
         }
 
         private void ItemsBrokeStart(Breakable breakable)
@@ -186,6 +230,7 @@ namespace LegacyOfMagic.Spells.SpellMonos
                 }
                 if (usePressed && altUsePressed && !reset)
                 {
+                    followTransform = null;
                     canLift = false;
                     currentRigidbody = null;
                     if (currentCreature)
@@ -204,13 +249,13 @@ namespace LegacyOfMagic.Spells.SpellMonos
                     altUsePressed = false;
                 }
 
-                if (altUsePressed)
+                else if (altUsePressed)
                 {
-                    distance += 0.11f;
+                   distance =  Mathf.Clamp(distance + 0.1f, 1f, 30f);
                 }
                 else if (usePressed)
                 {
-                    distance -= 0.1f;
+                    distance = Mathf.Clamp(distance - 0.1f, 1f, 30f);
                 }
             }
 
@@ -224,12 +269,24 @@ namespace LegacyOfMagic.Spells.SpellMonos
                     RaycastHit hit;
                     if (Physics.SphereCast(checkPoint, 1.5f, transform1.forward, out hit, 3))
                     {
-                         ExecuteLiftSetup(hit.collider.gameObject);
+                        if (hit.collider.gameObject.GetComponentInParent<Item>() is Item item && !item.IsHeld() && !item.physicBody.rigidBody.isKinematic)
+                        {
+                            if (item.holder && !item.holder.creature)
+                            {
+                                return;
+                            }
+                            GameManager.local.StartCoroutine(ExecuteLiftSetup(hit.collider.gameObject));
+                        }
+                        else if (hit.collider.gameObject.GetComponentInChildren<Creature>())
+                        {
+                            GameManager.local.StartCoroutine(ExecuteLiftSetup(hit.collider.gameObject));
+                        }
                     }
                 }
-
                 executeSphereCast = false;
             }
+            
+            base.Update();
         }
     }
 }

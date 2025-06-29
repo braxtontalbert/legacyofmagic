@@ -5,7 +5,9 @@ using System.Diagnostics;
 using System.Speech.Recognition;
 using System.Threading.Tasks;
 using LegacyOfMagic.Spells;
+using LegacyOfMagic.Spells.SpellMonos;
 using ThunderRoad;
+using ThunderRoad.DebugViz;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -31,6 +33,7 @@ namespace LegacyOfMagic.Management
         public GameObject highlighter;
         public Material selectorMat;
         public GameObject incendioEffect;
+        public GameObject incendioHiddenEffect;
         public GameObject bubbleHeadEffect;
         public GameObject impedimentaEffect;
         public GameObject imperioShown;
@@ -45,13 +48,55 @@ namespace LegacyOfMagic.Management
         public GameObject leviosoSparks;
         public GameObject evertestatumSparks;
         public GameObject wingardiumLeviosaEffect;
-        public GameObject imperioEffect;
         public GameObject depulsoEffect;
         public GameObject explosion;
         public GameObject avadaTest;
         public GameObject crucioEffect;
 
-        private Choices choices;
+        public const String wingardiumCastEffect = "apoz123Wand.SpellEffect.CastSpell.WingardiumLeviosa";
+        public const String engorgioCastEffect = "apoz123Wand.SpellEffect.CastSpell.Engorgio";
+        public const String imperioEffect = "apoz123Wand.SpellEffect.Cast.Imperio";
+        public const String evanescoCastEffect = "apoz123Wand.SpellEffect.CastSpell.Evanesco";
+        public const String crucioCastEffect = "apoz123Wand.SpellEffect.CastSpell.Crucio";
+        public const String geminioCastEffect = "apoz123Wand.SpellEffect.CastSpell.Geminio";
+        public const String flagratePointEffect = "apoz123Wand.SpellEffect.Flagrate";
+        public const String flagrateWritingEffect = "apoz123Wand.SpellEffect.FlagrateWriting";
+
+
+        //DADABook textures
+        public Texture stupefyText;
+        public Texture expelliarmusTexture;
+        public Texture petrificusTotalusTexture;
+        public Texture confringoTexture;
+        public Texture tarantallegraTexture;
+        public Texture impedimentaTexture;
+        public Texture incendioTexture;
+        public Texture everteStatumTexture;
+        public Texture flipendoTexture;
+        public Texture protegoTexture;
+        
+        //MMTBook textures
+        public Texture AccioTexture;
+        public Texture ArrestoMomentumTexture;
+        public Texture AscendioTexture;
+        public Texture DissiumlareTexture;
+        public Texture DissimuloTexture;
+        public Texture EngorgioTexture;
+        public Texture EvanescoTexture;
+        public Texture GeminioTexture;
+        public Texture WingardiumLeviosaTexture;
+        public Texture LeviosoTexture;
+        public Texture LumosTexture;
+        public Texture NoxTexture;
+        public Texture ReducioTexture;
+        public Texture AvadaTexture;
+        public Texture CrucioTexture;
+        public Texture ImperioTexture;
+        
+        //crucio sfx
+        public GameObject crucioStartEffect;
+        public GameObject crucioLoopEffect;
+        public GameObject crucioEndEffect;
         
         //SOUNDFX
         public GameObject impedimentaSoundFX;
@@ -74,68 +119,47 @@ namespace LegacyOfMagic.Management
             local = this;
             AsyncSetup();
         }
-        
+
+        public IEnumerator SetupRecognizer(Choices choices)
+        {
+            if (recognizer != null)
+            {
+                recognizer.SpeechRecognized -= Recognizer_SpeechRecognized;
+                recognizer = null;
+            }
+            try
+            {
+                recognizer = new SpeechRecognitionEngine();
+                Grammar servicesGrammar = new Grammar(new GrammarBuilder(choices));
+                recognizer.RequestRecognizerUpdate();
+                recognizer.LoadGrammarAsync(servicesGrammar);
+                recognizer.SetInputToDefaultAudioDevice();
+                recognizer.RecognizeAsync(RecognizeMode.Multiple);
+                recognizer.SpeechRecognized += Recognizer_SpeechRecognized;
+                foreach (string micName in Microphone.devices)
+                {
+                    Debug.Log("Default Microphone is: " + micName);
+                }
+                Debug.Log("HPLOM Loaded Recognition");
+            }
+            catch (PlatformNotSupportedException ex)
+            {
+                Debug.Log("HPLOM Platform Not Supported Error is: " + ex.Message);
+            }
+            catch (Exception e)
+            {
+                Debug.Log("All other exception: " + e);
+            }
+
+            yield return null;
+        }
         async void AsyncSetup() {
 
             await Task.Run(() =>
             {
-                List<ItemData> itemDatas = Catalog.GetDataList<ItemData>();
-                choices = new Choices();
-                choices.Add("Stupefy");
-                choices.Add("Expelliarmus");
-                choices.Add("Avada Kedavra");
-                choices.Add("Everte Statum");
-                choices.Add("Flipendo");
-                choices.Add("Levicorpus");
-                choices.Add("Levioso");
-                choices.Add("Confringo");
-                choices.Add("Morsmordre");
-                choices.Add("Petrificus Totalus");
-                choices.Add("Tarantallegra");
-                choices.Add("Ascendio");
-                choices.Add("ArrestoMomentum");
-                choices.Add("Depulso");
-                choices.Add("Dissimulo");
-                choices.Add("Dissimulare");
-                choices.Add("Accio");
-                choices.Add("Wingardium Leviosa");
-                choices.Add("Lumos");
-                choices.Add("Nox");
-                choices.Add("Protego");
-                choices.Add("Sectumsempra");
-                choices.Add("Liberacorpus");
-                choices.Add("Impedimenta");
-                choices.Add("Evanesco");
-                choices.Add("Engorgio");
-                choices.Add("Reducio");
-                choices.Add("Imperio");
-                choices.Add("Geminio");
-                parseItemWeapons(itemDatas);
-                
-                try
-                {
-                    recognizer = new SpeechRecognitionEngine();
-                    Grammar servicesGrammar = new Grammar(new GrammarBuilder(choices));
-                    recognizer.RequestRecognizerUpdate();
-                    recognizer.LoadGrammarAsync(servicesGrammar);
-                    recognizer.SetInputToDefaultAudioDevice();
-                    recognizer.RecognizeAsync(RecognizeMode.Multiple);
-                    recognizer.SpeechRecognized += Recognizer_SpeechRecognized;
-                    Application.quitting += () => Process.GetCurrentProcess().Kill();
-                    foreach (string micName in Microphone.devices)
-                    {
-                        Debug.Log("Default Microphone is: " + micName);
-                    }
-                    Debug.Log("HPLOM Loaded Recognition");
-                }
-                catch (PlatformNotSupportedException ex)
-                {
-                    Debug.Log("HPLOM Platform Not Supported Error is: " + ex.Message);
-                }
-                catch (Exception e)
-                {
-                    Debug.Log("All other exception: " + e);
-                }
+                //List<ItemData> itemDatas = Catalog.GetDataList<ItemData>();
+                //parseItemWeapons(itemDatas);
+                Application.quitting += () => Process.GetCurrentProcess().Kill();
             });
         }
 
@@ -158,10 +182,38 @@ namespace LegacyOfMagic.Management
             Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.SFX.PetrificusFreeze", callback =>{freezeSFX = callback;}, "FreezeSFX");
             Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.Impedimenta",callback => { impedimentaEffect = callback;}, "ImpedimentaEffect");
             Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SoundEffect.Impedimenta",callback => { impedimentaSoundFX = callback;}, "ImpedimentaSoundEffect");
-            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.ImperioHidden",callback => { imperioEffect = callback;}, "ImperioEffect");
-            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.ImperioShown",callback => { imperioShown = callback;}, "ImperioVisibleEffect");
             Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.SFX.GeminioPop",callback => { geminioPop = callback;}, "GeminioPopSfx");
-            
+            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.Incendio", callback =>{incendioEffect = callback;}, "IncendioEffect");
+            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.IncendioHidden", callback =>{incendioHiddenEffect = callback;}, "IncendioHiddenEffect");
+            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.CastSpell.Crucio.CrucioStartSFX", callback =>{crucioStartEffect = callback;}, "CrucioStartSFX");
+            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.CastSpell.Crucio.CrucioLoopSFX", callback =>{crucioLoopEffect = callback;}, "CrucioLoopSFX");
+            Catalog.LoadAssetAsync<GameObject>("apoz123Wand.SpellEffect.CastSpell.Crucio.CrucioEndSFX", callback =>{crucioEndEffect = callback;}, "CrucioEndSFX");
+            Catalog.LoadAssetAsync<Texture>("stupefyTextSDF", callback =>{stupefyText = callback;}, "StupefySDF");
+            Catalog.LoadAssetAsync<Texture>("expelliarmusTextSDF", callback =>{expelliarmusTexture = callback;}, "ExpelliarmusSDF");
+            Catalog.LoadAssetAsync<Texture>("petrificusTotalusTextSDF", callback =>{petrificusTotalusTexture = callback;}, "PetrificusTotalusSDF");
+            Catalog.LoadAssetAsync<Texture>("everteStatumTextSDF", callback =>{everteStatumTexture = callback;}, "EverteStatumSDF");
+            Catalog.LoadAssetAsync<Texture>("flipendoTextSDF", callback =>{flipendoTexture = callback;}, "FlipendoSDF");
+            Catalog.LoadAssetAsync<Texture>("confringoTextSDF", callback =>{confringoTexture = callback;}, "ConfringoSDF");
+            Catalog.LoadAssetAsync<Texture>("protegoTextSDF", callback =>{protegoTexture = callback;}, "ProtegoSDF");
+            Catalog.LoadAssetAsync<Texture>("incendioTextSDF", callback =>{incendioTexture = callback;}, "IncendioSDF");
+            Catalog.LoadAssetAsync<Texture>("impedimentaTextSDF", callback =>{impedimentaTexture = callback;}, "ImpedimentaSDF");
+            Catalog.LoadAssetAsync<Texture>("tarantallegraTextSDF", callback =>{tarantallegraTexture = callback;}, "TarantallegraSDF");
+            Catalog.LoadAssetAsync<Texture>("accioTextSDF", callback =>{AccioTexture = callback;}, "AccioSDF");
+            Catalog.LoadAssetAsync<Texture>("arrestoMomentumTextSDF", callback =>{ArrestoMomentumTexture = callback;}, "ArrestoMomentumSDF");
+            Catalog.LoadAssetAsync<Texture>("ascendioTextSDF", callback =>{AscendioTexture = callback;}, "AscendioSDF");
+            Catalog.LoadAssetAsync<Texture>("dissimulareTextSDF", callback => { DissiumlareTexture = callback; }, "DissimulareSDF");
+            Catalog.LoadAssetAsync<Texture>("dissimuloTextSDF", callback =>{DissimuloTexture = callback;}, "DissimuloSDF");
+            Catalog.LoadAssetAsync<Texture>("engorgioTextSDF", callback =>{EngorgioTexture = callback;}, "EngorgioSDF");
+            Catalog.LoadAssetAsync<Texture>("evanescoTextSDF", callback =>{EvanescoTexture = callback;}, "EvanescoSDF");
+            Catalog.LoadAssetAsync<Texture>("geminioTextSDF", callback =>{GeminioTexture = callback;}, "GeminioSDF");
+            Catalog.LoadAssetAsync<Texture>("wingardiumLeviosaTextSDF", callback =>{WingardiumLeviosaTexture = callback;}, "WingardiumLeviosaSDF");
+            Catalog.LoadAssetAsync<Texture>("leviosoTextSDF", callback =>{LeviosoTexture = callback;}, "LeviosoSDF");
+            Catalog.LoadAssetAsync<Texture>("lumosTextSDF", callback =>{LumosTexture = callback;}, "LumosSDF");
+            Catalog.LoadAssetAsync<Texture>("noxTextSDF", callback =>{NoxTexture = callback;}, "NoxSDF");
+            Catalog.LoadAssetAsync<Texture>("reducioTextSDF", callback =>{ReducioTexture = callback;}, "ReducioSDF");
+            Catalog.LoadAssetAsync<Texture>("avadaKedavraSDF", callback =>{AvadaTexture = callback;}, "AvadaKedavraSDF");
+            Catalog.LoadAssetAsync<Texture>("crucioSDF", callback =>{CrucioTexture = callback;}, "CrucioSDF");
+            Catalog.LoadAssetAsync<Texture>("imperioSDF", callback =>{ImperioTexture = callback;}, "ImperioSDF");
             
             return base.LoadAddressableAssetsCoroutine();
         }
@@ -177,7 +229,7 @@ namespace LegacyOfMagic.Management
                 foreach (var wand in currentlyHeldWands)
                 {
                     String resultParsed;
-                    String extraData;
+                    String extraData = null;
                     if (!result.Contains(accioString + " "))
                     {
                         
@@ -193,12 +245,12 @@ namespace LegacyOfMagic.Management
                     {
                         if (wand.gameObject.GetComponent<CastSpell>() is CastSpell castSpell)
                         {
-                            castSpell.Activate(resultParsed, wand, extraData : null);
+                            castSpell.Activate(resultParsed, wand, extraData);
                         }
                         else
                         {
                             CastSpell spellCastInstance = wand.gameObject.AddComponent<CastSpell>();
-                            spellCastInstance.Activate(resultParsed, wand, extraData : null);
+                            spellCastInstance.Activate(resultParsed, wand, extraData);
                         }
                     }
                     catch (Exception exception)
@@ -215,8 +267,70 @@ namespace LegacyOfMagic.Management
                                                            "it closer to your face.");
             }
         }
+
+
+        public (string value, Texture stupefyText) ReturnSpellTextureByName(string value)
+        {
+            switch (value)
+            {
+                case "Stupefy":
+                    return (value,stupefyText);
+                case "Expelliarmus":
+                    return (value,expelliarmusTexture);
+                case "PetrificusTotalus":
+                    return (value,petrificusTotalusTexture);
+                case "Impedimenta":
+                    return (value,impedimentaTexture);
+                case "Incendio":
+                    return (value,incendioTexture);
+                case "Protego":
+                    return (value,protegoTexture);
+                case "EverteStatum":
+                    return (value,everteStatumTexture);
+                case "Flipendo":
+                    return (value,flipendoTexture);
+                case "Confringo":
+                    return (value,confringoTexture);
+                case "Tarantallegra":
+                    return (value,tarantallegraTexture);
+                case "Accio":
+                    return (value,AccioTexture);
+                case "ArrestoMomentum":
+                    return (value, ArrestoMomentumTexture);
+                case "Ascendio":
+                    return (value, AscendioTexture);
+                case "Dissimulare":
+                    return (value, DissiumlareTexture);
+                case "Dissimulo":
+                    return (value, DissimuloTexture);
+                case "Engorgio":
+                    return (value, EngorgioTexture);
+                case "Evanesco":
+                    return (value, EvanescoTexture);
+                case "Geminio":
+                    return (value, GeminioTexture);
+                case "WingardiumLeviosa":
+                    return (value, WingardiumLeviosaTexture);
+                case "Levioso":
+                    return (value, LeviosoTexture);
+                case "Lumos":
+                    return (value, LumosTexture);
+                case "Nox":
+                    return (value, NoxTexture);
+                case "Reducio":
+                    return (value, ReducioTexture);
+                case "AvadaKedavra":
+                    return (value, AvadaTexture);
+                case "Crucio":
+                    return (value, CrucioTexture);
+                case "Imperio":
+                    return (value, ImperioTexture);
+                default:
+                    return ("Null",null);
+            }
+        }
         
-        private void parseItemWeapons(List<ItemData> itemDatas)
+        /*private void parseItemWeapons(List<ItemData> itemDatas)
         {
             choices.Add(accioString + " Weapon");
             foreach (ItemData data in itemDatas)
@@ -246,6 +360,6 @@ namespace LegacyOfMagic.Management
                     }
                 }
             }
-        }
+        }*/
     }
 }

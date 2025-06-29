@@ -20,7 +20,7 @@ namespace LegacyOfMagic.Spells.SpellMonos
 
             if (c.gameObject.GetComponentInParent<RagdollPart>() is RagdollPart part && part.gameObject.GetComponentInParent<Creature>() is Creature creature) {
 
-                if (!part.isSliced && !creature.isKilled)
+                if (!creature.isKilled && !creature.isPlayer)
                 {
                     int index = random.Next(0, animationData.animationClips.Count - 1);
 
